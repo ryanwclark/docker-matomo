@@ -1,0 +1,30 @@
+#!/usr/bin/with-contenv bash
+
+source /assets/functions/00-container
+PROCESS_NAME="matomo"
+
+check_service_initialized init 20-php-fpm
+
+### Adjust Runtime Variables
+sed -i -e "s#<CRON_PERIOD>#${CRON_PERIOD}#g" /assets/cron/crontab.txt
+sed -i -e "s#<WEBROOT>#${NGINX_WEBROOT}#g" /assets/cron/crontab.txt
+sed -i -e "s#<NGINX_USER>#${NGINX_USER}#g" /assets/cron/crontab.txt
+
+sanity_db
+db_ready mariadb
+
+### Check to see if Matomo Installed, if not, download and setup..
+if [ ! -f ${NGINX_WEBROOT}/index.php ]; then
+        print_warn "No Matomo Installation Found, Installing..."
+        mkdir -p ${NGINX_WEBROOT}
+        curl https://builds.matomo.org/piwik-latest.tar.gz | tar xfz - --strip 1 -C ${NGINX_WEBROOT}
+        curl https://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz | gunzip -c >${NGINX_WEBROOT}/misc/GeoIPCity.dat
+        chown -R ${NGINX_USER}:${NGINX_GROUP} ${NGINX_WEBROOT}
+        print_info "Install Complete"
+fi
+
+echo "alias console='cd /www/html; sudo -u nginx php ./console'" > /root/.bashrc
+
+### Set Permissions
+chown -R ${NGINX_USER}:${NGINX_GROUP} ${NGINX_WEBROOT}
+liftoff
